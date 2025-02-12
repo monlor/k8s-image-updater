@@ -22,13 +22,17 @@ type Config struct {
 // Annotation keys for image update configuration
 const (
 	// Enable auto update for the resource
-	AnnotationEnable = "image-updater.k8s.io/enabled"
-	// Image update mode: digest or release
+	AnnotationEnabled = "image-updater.k8s.io/enabled"
+	// Image update mode: digest, release or latest
 	AnnotationMode = "image-updater.k8s.io/mode"
 	// Container name to update, if not set, update all containers
 	AnnotationContainer = "image-updater.k8s.io/container"
 	// Registry authentication secret name
 	AnnotationSecret = "image-updater.k8s.io/secret"
+	// Restart annotation for latest mode
+	AnnotationRestart = "kubectl.kubernetes.io/restartedAt"
+	// Last known digest for latest mode
+	AnnotationLastDigest = "image-updater.k8s.io/last-digest"
 )
 
 var GlobalConfig = &Config{}

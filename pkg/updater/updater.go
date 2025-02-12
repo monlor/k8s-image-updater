@@ -88,79 +88,128 @@ func (u *Updater) getRegistryClientForSecret(ctx context.Context, namespace, sec
 }
 
 // Check if an image needs to be updated based on mode
-func (u *Updater) checkImageUpdate(ctx context.Context, currentImage, mode string, registryClient *registry.RegistryClient) (string, error) {
+func (u *Updater) checkReleaseMode(ctx context.Context, currentImage string, registryClient *registry.RegistryClient) (string, error) {
 	imageInfo, err := registry.ParseImage(currentImage)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse image %s: %v", currentImage, err)
 	}
 
-	logrus.Debugf("Checking image %s in %s mode", currentImage, mode)
-	switch mode {
-	case "digest":
-		newDigest, err := registryClient.GetDigest(ctx, currentImage)
-		if err != nil {
-			return "", fmt.Errorf("failed to get digest for %s: %v", currentImage, err)
-		}
-		logrus.Debugf("Current digest: %s, New digest: %s", imageInfo.Digest, newDigest)
-		if newDigest != imageInfo.Digest {
-			return fmt.Sprintf("%s/%s@%s", imageInfo.Registry, imageInfo.Repository, newDigest), nil
-		}
-	case "release":
-		tags, err := registryClient.ListTags(ctx, currentImage)
-		if err != nil {
-			return "", fmt.Errorf("failed to list tags for %s: %v", currentImage, err)
-		}
-		logrus.Debugf("Found %d tags for image %s", len(tags), currentImage)
-		sortedTags := registry.SortVersionTags(tags)
-		logrus.Debugf("Sorted tags: %v", sortedTags)
-		if len(sortedTags) > 0 && sortedTags[0] != imageInfo.Tag {
-			logrus.Debugf("Current tag: %s, Latest tag: %s", imageInfo.Tag, sortedTags[0])
-			return fmt.Sprintf("%s/%s:%s", imageInfo.Registry, imageInfo.Repository, sortedTags[0]), nil
-		}
-	default:
-		logrus.Warnf("Unknown update mode: %s", mode)
+	tags, err := registryClient.ListTags(ctx, currentImage)
+	if err != nil {
+		return "", fmt.Errorf("failed to list tags for %s: %v", currentImage, err)
 	}
-
+	logrus.Debugf("Found %d tags for image %s", len(tags), currentImage)
+	sortedTags := registry.SortVersionTags(tags)
+	if len(sortedTags) > 0 && sortedTags[0] != imageInfo.Tag {
+		logrus.Debugf("Current tag: %s, Latest tag: %s", imageInfo.Tag, sortedTags[0])
+		return fmt.Sprintf("%s/%s:%s", imageInfo.Registry, imageInfo.Repository, sortedTags[0]), nil
+	}
 	return "", nil
 }
 
+func (u *Updater) checkDigestMode(ctx context.Context, currentImage string, registryClient *registry.RegistryClient) (string, error) {
+	imageInfo, err := registry.ParseImage(currentImage)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse image %s: %v", currentImage, err)
+	}
+
+	newDigest, err := registryClient.GetDigest(ctx, currentImage)
+	if err != nil {
+		return "", fmt.Errorf("failed to get digest for %s: %v", currentImage, err)
+	}
+	logrus.Debugf("Current digest: %s, New digest: %s", imageInfo.Digest, newDigest)
+	if newDigest != imageInfo.Digest {
+		return fmt.Sprintf("%s/%s@%s", imageInfo.Registry, imageInfo.Repository, newDigest), nil
+	}
+	return "", nil
+}
+
+func (u *Updater) checkLatestMode(ctx context.Context, currentImage string, registryClient *registry.RegistryClient, annotations *map[string]string) (bool, error) {
+	newDigest, err := registryClient.GetDigest(ctx, currentImage)
+	if err != nil {
+		return false, fmt.Errorf("failed to get digest for %s: %v", currentImage, err)
+	}
+
+	lastDigest := (*annotations)[config.AnnotationLastDigest]
+	if lastDigest == "" {
+		(*annotations)[config.AnnotationLastDigest] = newDigest
+		// First time seeing this image, store the digest
+		logrus.Debugf("First time seeing image %s, storing digest %s", currentImage, newDigest)
+		return true, nil
+	}
+
+	// Compare digests
+	if newDigest != lastDigest {
+		(*annotations)[config.AnnotationLastDigest] = newDigest
+		(*annotations)[config.AnnotationRestart] = time.Now().Format(time.RFC3339)
+		logrus.Infof("New digest detected for %s: %s -> %s", currentImage, lastDigest, newDigest)
+		return true, nil
+	}
+	return false, nil
+}
+
 // Update container if needed
-func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1.Container, annotations map[string]string, namespace string) (bool, error) {
-	if annotations[config.AnnotationEnable] != "true" {
+func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1.Container, annotations *map[string]string, namespace string) (bool, error) {
+	// Ensure annotations map exists
+	if *annotations == nil {
+		*annotations = make(map[string]string)
+	}
+
+	if (*annotations)[config.AnnotationEnabled] != "true" {
 		logrus.Debugf("Auto-update not enabled for container %s", container.Name)
 		return false, nil
 	}
 
-	containerName := annotations[config.AnnotationContainer]
+	containerName := (*annotations)[config.AnnotationContainer]
 	if containerName != "" && containerName != container.Name {
 		logrus.Debugf("Container %s does not match target container %s", container.Name, containerName)
 		return false, nil
 	}
 
-	mode := annotations[config.AnnotationMode]
+	mode := (*annotations)[config.AnnotationMode]
 	if mode == "" {
 		mode = "release" // Default to release mode
 	}
-	logrus.Debugf("Using update mode %s for container %s", mode, container.Name)
 
-	registryClient, err := u.getRegistryClientForSecret(ctx, namespace, annotations[config.AnnotationSecret])
+	registryClient, err := u.getRegistryClientForSecret(ctx, namespace, (*annotations)[config.AnnotationSecret])
 	if err != nil {
 		return false, fmt.Errorf("failed to get registry client: %v", err)
 	}
 
-	logrus.Debugf("Checking for updates of image %s", container.Image)
-	newImage, err := u.checkImageUpdate(ctx, container.Image, mode, registryClient)
-	if err != nil {
-		return false, fmt.Errorf("failed to check image update: %v", err)
+	logrus.Debugf("Using update mode %s for container %s", mode, container.Name)
+
+	switch mode {
+	case "latest":
+		if container.ImagePullPolicy != corev1.PullAlways {
+			logrus.Warnf("Container %s is in latest mode but imagePullPolicy is not Always, skipping update", container.Name)
+			return false, nil
+		}
+		return u.checkLatestMode(ctx, container.Image, registryClient, annotations)
+
+	case "digest":
+		newImage, err := u.checkDigestMode(ctx, container.Image, registryClient)
+		if err != nil {
+			return false, err
+		}
+		if newImage != "" {
+			container.Image = newImage
+			return true, nil
+		}
+
+	case "release":
+		newImage, err := u.checkReleaseMode(ctx, container.Image, registryClient)
+		if err != nil {
+			return false, err
+		}
+		if newImage != "" {
+			container.Image = newImage
+			return true, nil
+		}
+
+	default:
+		logrus.Warnf("Unknown update mode: %s", mode)
 	}
 
-	if newImage != "" {
-		logrus.Infof("New image found for %s: %s -> %s", container.Name, container.Image, newImage)
-		container.Image = newImage
-		return true, nil
-	}
-
-	logrus.Debugf("No new image found for container %s", container.Name)
 	return false, nil
 }
 
@@ -175,7 +224,7 @@ func (u *Updater) updateDeployments(ctx context.Context) error {
 
 	for _, deploy := range deployments {
 		logrus.Debugf("Checking deployment %s/%s", deploy.Namespace, deploy.Name)
-		if deploy.Annotations[config.AnnotationEnable] != "true" {
+		if deploy.Annotations[config.AnnotationEnabled] != "true" {
 			logrus.Debugf("Deployment %s/%s is not enabled for auto-update", deploy.Namespace, deploy.Name)
 			continue
 		}
@@ -185,7 +234,7 @@ func (u *Updater) updateDeployments(ctx context.Context) error {
 			container := &deploy.Spec.Template.Spec.Containers[i]
 			logrus.Debugf("Checking container %s in deployment %s/%s", container.Name, deploy.Namespace, deploy.Name)
 			
-			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, deploy.Annotations, deploy.Namespace)
+			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, &deploy.Annotations, deploy.Namespace)
 			if err != nil {
 				logrus.Errorf("Failed to update container %s in deployment %s/%s: %v", container.Name, deploy.Namespace, deploy.Name, err)
 				continue
@@ -198,7 +247,7 @@ func (u *Updater) updateDeployments(ctx context.Context) error {
 
 		if updated {
 			logrus.Infof("Updating deployment %s/%s", deploy.Namespace, deploy.Name)
-			if _, err := u.k8sClient.UpdateDeployment(deploy.Namespace, deploy.Name, deploy.Spec.Template.Spec.Containers[0].Image, false); err != nil {
+			if err := u.k8sClient.UpdateDeployment(&deploy); err != nil {
 				logrus.Errorf("Failed to update deployment %s/%s: %v", deploy.Namespace, deploy.Name, err)
 			}
 		} else {
@@ -220,7 +269,7 @@ func (u *Updater) updateStatefulSets(ctx context.Context) error {
 
 	for _, sts := range statefulsets {
 		logrus.Debugf("Checking statefulset %s/%s", sts.Namespace, sts.Name)
-		if sts.Annotations[config.AnnotationEnable] != "true" {
+		if sts.Annotations[config.AnnotationEnabled] != "true" {
 			logrus.Debugf("StatefulSet %s/%s is not enabled for auto-update", sts.Namespace, sts.Name)
 			continue
 		}
@@ -230,7 +279,7 @@ func (u *Updater) updateStatefulSets(ctx context.Context) error {
 			container := &sts.Spec.Template.Spec.Containers[i]
 			logrus.Debugf("Checking container %s in statefulset %s/%s", container.Name, sts.Namespace, sts.Name)
 			
-			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, sts.Annotations, sts.Namespace)
+			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, &sts.Annotations, sts.Namespace)
 			if err != nil {
 				logrus.Errorf("Failed to update container %s in statefulset %s/%s: %v", container.Name, sts.Namespace, sts.Name, err)
 				continue
@@ -243,7 +292,7 @@ func (u *Updater) updateStatefulSets(ctx context.Context) error {
 
 		if updated {
 			logrus.Infof("Updating statefulset %s/%s", sts.Namespace, sts.Name)
-			if _, err := u.k8sClient.UpdateStatefulSet(sts.Namespace, sts.Name, sts.Spec.Template.Spec.Containers[0].Image, false); err != nil {
+			if err := u.k8sClient.UpdateStatefulSet(&sts); err != nil {
 				logrus.Errorf("Failed to update statefulset %s/%s: %v", sts.Namespace, sts.Name, err)
 			}
 		} else {
@@ -265,7 +314,7 @@ func (u *Updater) updateDaemonSets(ctx context.Context) error {
 
 	for _, ds := range daemonsets {
 		logrus.Debugf("Checking daemonset %s/%s", ds.Namespace, ds.Name)
-		if ds.Annotations[config.AnnotationEnable] != "true" {
+		if ds.Annotations[config.AnnotationEnabled] != "true" {
 			logrus.Debugf("DaemonSet %s/%s is not enabled for auto-update", ds.Namespace, ds.Name)
 			continue
 		}
@@ -275,7 +324,7 @@ func (u *Updater) updateDaemonSets(ctx context.Context) error {
 			container := &ds.Spec.Template.Spec.Containers[i]
 			logrus.Debugf("Checking container %s in daemonset %s/%s", container.Name, ds.Namespace, ds.Name)
 			
-			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, ds.Annotations, ds.Namespace)
+			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, &ds.Annotations, ds.Namespace)
 			if err != nil {
 				logrus.Errorf("Failed to update container %s in daemonset %s/%s: %v", container.Name, ds.Namespace, ds.Name, err)
 				continue
@@ -288,7 +337,7 @@ func (u *Updater) updateDaemonSets(ctx context.Context) error {
 
 		if updated {
 			logrus.Infof("Updating daemonset %s/%s", ds.Namespace, ds.Name)
-			if _, err := u.k8sClient.UpdateDaemonSet(ds.Namespace, ds.Name, ds.Spec.Template.Spec.Containers[0].Image, false); err != nil {
+			if err := u.k8sClient.UpdateDaemonSet(&ds); err != nil {
 				logrus.Errorf("Failed to update daemonset %s/%s: %v", ds.Namespace, ds.Name, err)
 			}
 		} else {

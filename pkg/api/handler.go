@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -26,13 +25,14 @@ func AuthMiddleware() gin.HandlerFunc {
 func UpdateImage(c *gin.Context) {
 	// Get values from query parameters
 	namespace := c.Query("namespace")
-	name := c.Query("name")
+	service := c.Query("service")
 	kind := strings.ToLower(c.DefaultQuery("kind", "deployment")) // default value is deployment
 	image := c.Query("image")
+	container := c.Query("container")
 
 	// Validate required parameters
-	if namespace == "" || name == "" || image == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "namespace, name, and image are required"})
+	if namespace == "" || service == "" || image == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "namespace, service, and image are required"})
 		return
 	}
 
@@ -53,21 +53,24 @@ func UpdateImage(c *gin.Context) {
 
 	switch kind {
 	case "deployment":
-		result, updateErr = client.UpdateDeployment(namespace, name, image, false)
+		result, updateErr = client.UpdateDeploymentImage(namespace, service, container, image)
 	case "statefulset":
-		result, updateErr = client.UpdateStatefulSet(namespace, name, image, false)
+		result, updateErr = client.UpdateStatefulSetImage(namespace, service, container, image)
 	case "daemonset":
-		result, updateErr = client.UpdateDaemonSet(namespace, name, image, false)
+		result, updateErr = client.UpdateDaemonSetImage(namespace, service, container, image)
 	}
 
 	if updateErr != nil {
-		logrus.Errorf("Failed to update %s %s/%s: %v", kind, namespace, name, updateErr)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": updateErr.Error()})
+		logrus.Errorf("Failed to update %s %s/%s: %v", kind, namespace, service, updateErr)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"ok": false,
+			"details": updateErr.Error(),
+		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": result,
-		"details": fmt.Sprintf("Updated %s %s/%s with image %s", kind, namespace, name, image),
+		"ok": true,
+		"details": result,
 	})
 } 

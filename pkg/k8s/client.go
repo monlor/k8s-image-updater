@@ -74,12 +74,7 @@ func shouldRestart(currentImage string, newImage string, pullPolicy corev1.PullP
 }
 
 // Restart Deployment
-func (c *Client) restartDeployment(namespace, name string) error {
-	deploy, err := c.clientset.AppsV1().Deployments(namespace).Get(context.Background(), name, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-
+func (c *Client) restartDeployment(deploy *appsv1.Deployment) error {
 	// Ensure annotations exist
 	if deploy.Spec.Template.Annotations == nil {
 		deploy.Spec.Template.Annotations = make(map[string]string)
@@ -88,17 +83,12 @@ func (c *Client) restartDeployment(namespace, name string) error {
 	// Add or update restart annotation
 	deploy.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
 
-	_, err = c.clientset.AppsV1().Deployments(namespace).Update(context.Background(), deploy, metav1.UpdateOptions{})
+	_, err := c.clientset.AppsV1().Deployments(deploy.Namespace).Update(context.Background(), deploy, metav1.UpdateOptions{})
 	return err
 }
 
 // Restart StatefulSet
-func (c *Client) restartStatefulSet(namespace, name string) error {
-	sts, err := c.clientset.AppsV1().StatefulSets(namespace).Get(context.Background(), name, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-
+func (c *Client) restartStatefulSet(sts *appsv1.StatefulSet) error {
 	// Ensure annotations exist
 	if sts.Spec.Template.Annotations == nil {
 		sts.Spec.Template.Annotations = make(map[string]string)
@@ -107,17 +97,12 @@ func (c *Client) restartStatefulSet(namespace, name string) error {
 	// Add or update restart annotation
 	sts.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
 
-	_, err = c.clientset.AppsV1().StatefulSets(namespace).Update(context.Background(), sts, metav1.UpdateOptions{})
+	_, err := c.clientset.AppsV1().StatefulSets(sts.Namespace).Update(context.Background(), sts, metav1.UpdateOptions{})
 	return err
 }
 
 // Restart DaemonSet
-func (c *Client) restartDaemonSet(namespace, name string) error {
-	ds, err := c.clientset.AppsV1().DaemonSets(namespace).Get(context.Background(), name, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-
+func (c *Client) restartDaemonSet(ds *appsv1.DaemonSet) error {
 	// Ensure annotations exist
 	if ds.Spec.Template.Annotations == nil {
 		ds.Spec.Template.Annotations = make(map[string]string)
@@ -126,23 +111,34 @@ func (c *Client) restartDaemonSet(namespace, name string) error {
 	// Add or update restart annotation
 	ds.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
 
-	_, err = c.clientset.AppsV1().DaemonSets(namespace).Update(context.Background(), ds, metav1.UpdateOptions{})
+	_, err := c.clientset.AppsV1().DaemonSets(ds.Namespace).Update(context.Background(), ds, metav1.UpdateOptions{})
 	return err
 }
 
-func (c *Client) UpdateDeployment(namespace, name, image string, forceRestart bool) (string, error) {
-	deploy, err := c.clientset.AppsV1().Deployments(namespace).Get(context.Background(), name, metav1.GetOptions{})
+func (c *Client) UpdateDeploymentImage(namespace, service, container, image string) (string, error) {
+	deploy, err := c.clientset.AppsV1().Deployments(namespace).Get(context.Background(), service, metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}
 
+	// If container is empty, use the first container
+	if container == "" && len(deploy.Spec.Template.Spec.Containers) > 0 {
+		container = deploy.Spec.Template.Spec.Containers[0].Name
+	}
+
+	containerFound := false
 	for i := range deploy.Spec.Template.Spec.Containers {
+		if deploy.Spec.Template.Spec.Containers[i].Name != container {
+			continue
+		}
+		containerFound = true
+
 		// Case 1: Image is the same and pull policy is Always, need to restart
 		if deploy.Spec.Template.Spec.Containers[i].Image == image && deploy.Spec.Template.Spec.Containers[i].ImagePullPolicy == corev1.PullAlways {
-			if err := c.restartDeployment(namespace, name); err != nil {
+			if err := c.restartDeployment(deploy); err != nil {
 				return "", fmt.Errorf("failed to restart deployment: %v", err)
 			}
-			return "Deployment restarted to fetch latest image", nil
+			return fmt.Sprintf("Updated deployment %s/%s (container: %s) by restarting to fetch latest image %s", namespace, service, container, image), nil
 		}
 
 		// Case 2: Image is different, need to update image
@@ -152,26 +148,41 @@ func (c *Client) UpdateDeployment(namespace, name, image string, forceRestart bo
 			if err != nil {
 				return "", err
 			}
-			return "Image updated", nil
+			return fmt.Sprintf("Updated deployment %s/%s (container: %s) with image %s", namespace, service, container, image), nil
 		}
 	}
 
-	return "Image is already up to date", nil
+	if !containerFound {
+		return "", fmt.Errorf("container %s not found in deployment", container)
+	}
+
+	return fmt.Sprintf("Image %s is already up to date for deployment %s/%s (container: %s)", image, namespace, service, container), nil
 }
 
-func (c *Client) UpdateStatefulSet(namespace, name, image string, forceRestart bool) (string, error) {
-	sts, err := c.clientset.AppsV1().StatefulSets(namespace).Get(context.Background(), name, metav1.GetOptions{})
+func (c *Client) UpdateStatefulSetImage(namespace, service, container, image string) (string, error) {
+	sts, err := c.clientset.AppsV1().StatefulSets(namespace).Get(context.Background(), service, metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}
 
+	// If container is empty, use the first container
+	if container == "" && len(sts.Spec.Template.Spec.Containers) > 0 {
+		container = sts.Spec.Template.Spec.Containers[0].Name
+	}
+
+	containerFound := false
 	for i := range sts.Spec.Template.Spec.Containers {
+		if sts.Spec.Template.Spec.Containers[i].Name != container {
+			continue
+		}
+		containerFound = true
+
 		// Case 1: Image is the same and pull policy is Always, need to restart
 		if sts.Spec.Template.Spec.Containers[i].Image == image && sts.Spec.Template.Spec.Containers[i].ImagePullPolicy == corev1.PullAlways {
-			if err := c.restartStatefulSet(namespace, name); err != nil {
+			if err := c.restartStatefulSet(sts); err != nil {
 				return "", fmt.Errorf("failed to restart statefulset: %v", err)
 			}
-			return "StatefulSet restarted to fetch latest image", nil
+			return fmt.Sprintf("Updated statefulset %s/%s (container: %s) by restarting to fetch latest image %s", namespace, service, container, image), nil
 		}
 
 		// Case 2: Image is different, need to update image
@@ -181,26 +192,41 @@ func (c *Client) UpdateStatefulSet(namespace, name, image string, forceRestart b
 			if err != nil {
 				return "", err
 			}
-			return "Image updated", nil
+			return fmt.Sprintf("Updated statefulset %s/%s (container: %s) with image %s", namespace, service, container, image), nil
 		}
 	}
 
-	return "Image is already up to date", nil
+	if !containerFound {
+		return "", fmt.Errorf("container %s not found in statefulset", container)
+	}
+
+	return fmt.Sprintf("Image %s is already up to date for statefulset %s/%s (container: %s)", image, namespace, service, container), nil
 }
 
-func (c *Client) UpdateDaemonSet(namespace, name, image string, forceRestart bool) (string, error) {
-	ds, err := c.clientset.AppsV1().DaemonSets(namespace).Get(context.Background(), name, metav1.GetOptions{})
+func (c *Client) UpdateDaemonSetImage(namespace, service, container, image string) (string, error) {
+	ds, err := c.clientset.AppsV1().DaemonSets(namespace).Get(context.Background(), service, metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}
 
+	// If container is empty, use the first container
+	if container == "" && len(ds.Spec.Template.Spec.Containers) > 0 {
+		container = ds.Spec.Template.Spec.Containers[0].Name
+	}
+
+	containerFound := false
 	for i := range ds.Spec.Template.Spec.Containers {
+		if ds.Spec.Template.Spec.Containers[i].Name != container {
+			continue
+		}
+		containerFound = true
+
 		// Case 1: Image is the same and pull policy is Always, need to restart
 		if ds.Spec.Template.Spec.Containers[i].Image == image && ds.Spec.Template.Spec.Containers[i].ImagePullPolicy == corev1.PullAlways {
-			if err := c.restartDaemonSet(namespace, name); err != nil {
+			if err := c.restartDaemonSet(ds); err != nil {
 				return "", fmt.Errorf("failed to restart daemonset: %v", err)
 			}
-			return "DaemonSet restarted to fetch latest image", nil
+			return fmt.Sprintf("Updated daemonset %s/%s (container: %s) by restarting to fetch latest image %s", namespace, service, container, image), nil
 		}
 
 		// Case 2: Image is different, need to update image
@@ -210,11 +236,15 @@ func (c *Client) UpdateDaemonSet(namespace, name, image string, forceRestart boo
 			if err != nil {
 				return "", err
 			}
-			return "Image updated", nil
+			return fmt.Sprintf("Updated daemonset %s/%s (container: %s) with image %s", namespace, service, container, image), nil
 		}
 	}
 
-	return "Image is already up to date", nil
+	if !containerFound {
+		return "", fmt.Errorf("container %s not found in daemonset", container)
+	}
+
+	return fmt.Sprintf("Image %s is already up to date for daemonset %s/%s (container: %s)", image, namespace, service, container), nil
 }
 
 // List all deployments in the cluster
@@ -247,4 +277,22 @@ func (c *Client) ListDaemonSets(ctx context.Context, opts metav1.ListOptions) ([
 // Get secret from the cluster
 func (c *Client) GetSecret(ctx context.Context, namespace, name string) (*corev1.Secret, error) {
 	return c.clientset.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{}) 
+}
+
+// Update deployment in the cluster
+func (c *Client) UpdateDeployment(deploy *appsv1.Deployment) error {
+	_, err := c.clientset.AppsV1().Deployments(deploy.Namespace).Update(context.Background(), deploy, metav1.UpdateOptions{})
+	return err
+}
+
+// Update statefulset in the cluster
+func (c *Client) UpdateStatefulSet(sts *appsv1.StatefulSet) error {
+	_, err := c.clientset.AppsV1().StatefulSets(sts.Namespace).Update(context.Background(), sts, metav1.UpdateOptions{})
+	return err
+}
+
+// Update daemonset in the cluster
+func (c *Client) UpdateDaemonSet(ds *appsv1.DaemonSet) error {
+	_, err := c.clientset.AppsV1().DaemonSets(ds.Namespace).Update(context.Background(), ds, metav1.UpdateOptions{})
+	return err
 }

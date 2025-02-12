@@ -63,7 +63,7 @@ The auto-update feature can be configured using annotations on your Kubernetes r
 ```yaml
 annotations:
   image-updater.k8s.io/enabled: "true"           # Enable auto-update for this resource
-  image-updater.k8s.io/mode: "release"          # Update mode: "release" or "digest"
+  image-updater.k8s.io/mode: "release"          # Update mode: "release", "digest" or "latest"
   image-updater.k8s.io/container: "app"         # Optional: specify container name
   image-updater.k8s.io/secret: "registry-auth"  # Optional: registry authentication secret
 ```
@@ -79,6 +79,12 @@ annotations:
    - Updates when the image digest changes
    - Useful for `latest` tags or when you want to update on any change
    - Example: `nginx@sha256:abc...` -> `nginx@sha256:xyz...`
+
+3. **Latest Mode** (`mode: "latest"`)
+   - Monitors digest changes for images with fixed tags (including latest tag)
+   - Requires `imagePullPolicy: Always` to be set
+   - Restarts the pod when a new image is detected with the same tag
+   - Example: When `nginx:latest` has a new digest, the pod will be restarted
 
 ### Registry Authentication
 
@@ -127,18 +133,19 @@ spec:
 
 ```bash
 # Full request
-curl -X GET "http://k8s-image-updater:8080/api/v1/update?namespace=default&name=my-app&kind=deployment&image=my-app:v1.0.0" \
+curl -X GET "http://k8s-image-updater:8080/api/v1/update?namespace=default&service=my-app&container=app&kind=deployment&image=my-app:v1.0.0" \
   -H "X-API-Key: your-secure-api-key"
 
 # Simplified request (using default kind=deployment)
-curl -X GET "http://k8s-image-updater:8080/api/v1/update?namespace=default&name=my-app&image=my-app:v1.0.0" \
+curl -X GET "http://k8s-image-updater:8080/api/v1/update?namespace=default&service=my-app&container=app&image=my-app:v1.0.0" \
   -H "X-API-Key: your-secure-api-key"
 ```
 
 **Parameters**:
 
 - `namespace`: (required) Kubernetes namespace
-- `name`: (required) Resource name
+- `service`: (required) Service name
+- `container`: (optional) Container name, defaults to service name
 - `kind`: (optional) Resource type (deployment, statefulset, or daemonset), defaults to deployment
 - `image`: (required) New image address and tag
 
@@ -146,8 +153,8 @@ curl -X GET "http://k8s-image-updater:8080/api/v1/update?namespace=default&name=
 
 ```json
 {
-  "message": "Image updated",
-  "details": "Updated deployment default/my-app with image my-app:v1.0.0"
+  "details":"Image nginx:latest is already up to date for deployment default/nginx-deployment (container: nginx)",
+  "ok":true
 }
 ```
 

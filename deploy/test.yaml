@@ -5,7 +5,7 @@ metadata:
   namespace: default
   annotations:
     image-updater.k8s.io/enabled: "true"
-    image-updater.k8s.io/mode: "release"
+    image-updater.k8s.io/mode: "latest"
     image-updater.k8s.io/container: "nginx"
 spec:
   replicas: 2
@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: nginx
-        image: nginx:1.27.2-bookworm-otel
+        image: nginx:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 80
