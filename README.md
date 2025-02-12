@@ -1,14 +1,38 @@
 # Kubernetes Image Updater
 
-A simple API service for updating container images in a Kubernetes cluster. Supports Deployment, StatefulSet, and DaemonSet resource types.
+A powerful and flexible Kubernetes controller that automatically updates container images in your cluster. It supports both API-driven updates and annotation-based automatic updates, making it easy to keep your applications up to date.
 
 ## Features
 
-- Support for updating container images in Deployments, StatefulSets, and DaemonSets
-- Automatic restart based on image pull policy
+🚀 **Two Update Methods**
+- API-driven manual updates for controlled deployments
+- Annotation-based automatic updates for hands-free operation (can be disabled)
+
+🔄 **Resource Support**
+- Deployments
+- StatefulSets
+- DaemonSets
+
+🎯 **Smart Update Strategies**
+- Semantic version-based updates (e.g., 1.2.3 -> 1.2.4)
+- Digest-based updates for immutable tags
+- Prioritizes clean version tags over suffixed ones (e.g., prefers 1.2.3 over 1.2.3-alpine)
+
+🔐 **Security Features**
 - API key authentication
+- Registry authentication support
 - Minimal RBAC configuration
-- Kubernetes API access using ServiceAccount
+
+⚙️ **Flexible Configuration**
+- Enable/disable auto-updater globally
+- Configurable update interval
+- Container-specific updates
+- Multiple registry support
+
+🔍 **Monitoring & Control**
+- Detailed update logs
+- Dry-run mode available
+- Automatic restart based on image pull policy
 
 ## Installation
 
@@ -30,6 +54,69 @@ kubectl apply -f deploy/rbac.yaml
 
 ```bash
 kubectl apply -f deploy/deployment.yaml
+```
+
+## Auto-Update Configuration
+
+The auto-update feature can be configured using annotations on your Kubernetes resources:
+
+```yaml
+annotations:
+  image-updater.k8s.io/enabled: "true"           # Enable auto-update for this resource
+  image-updater.k8s.io/mode: "release"          # Update mode: "release" or "digest"
+  image-updater.k8s.io/container: "app"         # Optional: specify container name
+  image-updater.k8s.io/secret: "registry-auth"  # Optional: registry authentication secret
+```
+
+### Update Modes
+
+1. **Release Mode** (`mode: "release"`)
+   - Updates to the latest version based on semantic versioning
+   - Supports both `v` prefixed (v1.2.3) and non-prefixed (1.2.3) versions
+   - Example: `nginx:1.21.0` -> `nginx:1.22.0`
+
+2. **Digest Mode** (`mode: "digest"`)
+   - Updates when the image digest changes
+   - Useful for `latest` tags or when you want to update on any change
+   - Example: `nginx@sha256:abc...` -> `nginx@sha256:xyz...`
+
+### Registry Authentication
+
+To use private registries, create a secret with registry credentials:
+
+```bash
+kubectl create secret generic registry-auth \
+  --namespace=your-namespace \
+  --from-literal=username=your-username \
+  --from-literal=password=your-password
+```
+
+Then reference it in your resource annotations:
+
+```yaml
+annotations:
+  image-updater.k8s.io/secret: "registry-auth"
+```
+
+### Example Configuration
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+  annotations:
+    image-updater.k8s.io/enabled: "true"
+    image-updater.k8s.io/mode: "release"
+    image-updater.k8s.io/container: "app"
+    image-updater.k8s.io/secret: "registry-auth"
+spec:
+  template:
+    spec:
+      containers:
+      - name: app
+        image: my-registry/my-app:1.0.0
+        imagePullPolicy: Always
 ```
 
 ## API Usage
@@ -105,6 +192,22 @@ Environment variables:
 - `API_PORT`: API service port (default: 8080)
 - `API_KEY`: API access key
 - `KUBECONFIG`: Path to kubeconfig file
+- `UPDATER_ENABLED`: Enable/disable auto-updater (default: true)
+- `IMAGE_UPDATE_INTERVAL`: Interval for checking image updates (default: 5m)
+- `LOG_LEVEL`: Logging level (default: info)
+
+### Auto-Updater Configuration
+
+The auto-updater can be:
+1. Disabled globally using `UPDATER_ENABLED=false`
+2. Enabled/disabled per resource using annotations
+
+Example deployment with auto-updater disabled globally:
+```yaml
+env:
+- name: UPDATER_ENABLED
+  value: "false"
+```
 
 ## Build and Run
 

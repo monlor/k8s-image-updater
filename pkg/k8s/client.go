@@ -14,6 +14,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	appsv1 "k8s.io/api/apps/v1"
 )
 
 type Client struct {
@@ -214,4 +215,36 @@ func (c *Client) UpdateDaemonSet(namespace, name, image string, forceRestart boo
 	}
 
 	return "Image is already up to date", nil
-} 
+}
+
+// List all deployments in the cluster
+func (c *Client) ListDeployments(ctx context.Context, opts metav1.ListOptions) ([]appsv1.Deployment, error) {
+	deployments, err := c.clientset.AppsV1().Deployments("").List(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	return deployments.Items, nil
+}
+
+// List all statefulsets in the cluster
+func (c *Client) ListStatefulSets(ctx context.Context, opts metav1.ListOptions) ([]appsv1.StatefulSet, error) {
+	statefulsets, err := c.clientset.AppsV1().StatefulSets("").List(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	return statefulsets.Items, nil
+}
+
+// List all daemonsets in the cluster
+func (c *Client) ListDaemonSets(ctx context.Context, opts metav1.ListOptions) ([]appsv1.DaemonSet, error) {
+	daemonsets, err := c.clientset.AppsV1().DaemonSets("").List(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	return daemonsets.Items, nil
+}
+
+// Get secret from the cluster
+func (c *Client) GetSecret(ctx context.Context, namespace, name string) (*corev1.Secret, error) {
+	return c.clientset.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{}) 
+}

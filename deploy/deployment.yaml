@@ -16,15 +16,21 @@ spec:
       serviceAccountName: k8s-image-updater
       containers:
       - name: k8s-image-updater
-        image: k8s-image-updater:latest
+        image: ghcr.io/monlor/k8s-image-updater:main
         ports:
         - containerPort: 8080
         env:
+        - name: API_PORT
+          value: "8080"
         - name: API_KEY
           valueFrom:
             secretKeyRef:
               name: k8s-image-updater
               key: api-key
+        - name: UPDATER_ENABLED
+          value: "true"
+        - name: IMAGE_UPDATE_INTERVAL
+          value: "5m"
         resources:
           requests:
             cpu: 100m
