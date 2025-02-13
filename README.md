@@ -125,7 +125,7 @@ curl -X GET "http://k8s-image-updater:8080/api/v1/update?namespace=default&servi
 
 - `namespace`: (required) Kubernetes namespace
 - `service`: (required) Service name
-- `container`: (optional) Container name, defaults to service name
+- `container`: (optional) Container name, defaults to first container
 - `kind`: (optional) Resource type (deployment, statefulset, or daemonset), defaults to deployment
 - `image`: (required) New image address and tag
 
