@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -36,6 +37,19 @@ func UpdateImage(c *gin.Context) {
 		return
 	}
 
+	// Validate namespace
+	if config.GlobalConfig.AllowedNamespaces != "" {
+		allowedNamespaces := strings.Split(config.GlobalConfig.AllowedNamespaces, ",")
+		if !slices.Contains(allowedNamespaces, namespace) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"ok":      false,
+				"message": "Namespace " + namespace + " not allowed!",
+			})
+			c.Abort()
+			return
+		}
+	}
+
 	// Validate resource type
 	if kind != "deployment" && kind != "statefulset" && kind != "daemonset" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "kind must be one of: deployment, statefulset, daemonset"})
@@ -63,14 +77,14 @@ func UpdateImage(c *gin.Context) {
 	if updateErr != nil {
 		logrus.Errorf("Failed to update %s %s/%s: %v", kind, namespace, service, updateErr)
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"ok": false,
-			"details": updateErr.Error(),
+			"ok":      false,
+			"message": updateErr.Error(),
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"ok": true,
-		"details": result,
+		"ok":      true,
+		"message": result,
 	})
-} 
+}

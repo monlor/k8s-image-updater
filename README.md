@@ -182,6 +182,7 @@ Environment variables:
 - `UPDATER_ENABLED`: Enable/disable auto-updater (default: true)
 - `IMAGE_UPDATE_INTERVAL`: Interval for checking image updates (default: 5m)
 - `LOG_LEVEL`: Logging level (default: info)
+- `ALLOWED_NAMESPACES`: Comma-separated list of namespaces that the API can operate on
 
 ### Auto-Updater Configuration
 

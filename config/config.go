@@ -17,6 +17,9 @@ type Config struct {
 	// Image update configuration
 	UpdaterEnabled      bool          `env:"UPDATER_ENABLED" envDefault:"true"`     // Enable/disable auto updater
 	ImageUpdateInterval time.Duration `env:"IMAGE_UPDATE_INTERVAL" envDefault:"5m"` // Default check interval is 5 minutes
+
+	// Allowed namespaces configuration
+	AllowedNamespaces string `env:"ALLOWED_NAMESPACES" envDefault:""` // Comma-separated list of allowed namespaces
 }
 
 // Annotation keys for image update configuration
