@@ -65,7 +65,6 @@ annotations:
   image-updater.k8s.io/enabled: "true"           # Enable auto-update for this resource
   image-updater.k8s.io/mode: "release"          # Update mode: "release", "digest" or "latest"
   image-updater.k8s.io/container: "app"         # Optional: specify container name
-  image-updater.k8s.io/secret: "registry-auth"  # Optional: registry authentication secret
 ```
 
 ### Update Modes
@@ -86,24 +85,6 @@ annotations:
    - Restarts the pod when a new image is detected with the same tag
    - Example: When `nginx:latest` has a new digest, the pod will be restarted
 
-### Registry Authentication
-
-To use private registries, create a secret with registry credentials:
-
-```bash
-kubectl create secret generic registry-auth \
-  --namespace=your-namespace \
-  --from-literal=username=your-username \
-  --from-literal=password=your-password
-```
-
-Then reference it in your resource annotations:
-
-```yaml
-annotations:
-  image-updater.k8s.io/secret: "registry-auth"
-```
-
 ### Example Configuration
 
 ```yaml
@@ -115,7 +96,6 @@ metadata:
     image-updater.k8s.io/enabled: "true"
     image-updater.k8s.io/mode: "release"
     image-updater.k8s.io/container: "app"
-    image-updater.k8s.io/secret: "registry-auth"
 spec:
   template:
     spec:

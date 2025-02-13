@@ -15,7 +15,7 @@ type Config struct {
 	LogLevel   string `env:"LOG_LEVEL" envDefault:""`
 
 	// Image update configuration
-	UpdaterEnabled      bool          `env:"UPDATER_ENABLED" envDefault:"true"` // Enable/disable auto updater
+	UpdaterEnabled      bool          `env:"UPDATER_ENABLED" envDefault:"true"`     // Enable/disable auto updater
 	ImageUpdateInterval time.Duration `env:"IMAGE_UPDATE_INTERVAL" envDefault:"5m"` // Default check interval is 5 minutes
 }
 
@@ -27,8 +27,6 @@ const (
 	AnnotationMode = "image-updater.k8s.io/mode"
 	// Container name to update, if not set, update all containers
 	AnnotationContainer = "image-updater.k8s.io/container"
-	// Registry authentication secret name
-	AnnotationSecret = "image-updater.k8s.io/secret"
 	// Restart annotation for latest mode
 	AnnotationRestart = "kubectl.kubernetes.io/restartedAt"
 	// Last known digest for latest mode
@@ -42,4 +40,4 @@ func init() {
 		logrus.Fatalf("Failed to parse environment variables: %v", err)
 	}
 	logrus.Infof("Loaded configuration: %+v", GlobalConfig)
-} 
+}

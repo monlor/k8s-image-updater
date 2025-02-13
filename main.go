@@ -48,7 +48,7 @@ func main() {
 
 	// Create API route group with authentication
 	apiV1 := r.Group("/api/v1")
-	apiV1.Use(api.AuthMiddleware()) 
+	apiV1.Use(api.AuthMiddleware())
 	{
 		// Register routes under the authenticated group
 		apiV1.GET("/update", api.UpdateImage)
@@ -60,4 +60,4 @@ func main() {
 	if err := r.Run(addr); err != nil {
 		logrus.Fatalf("Failed to start server: %v", err)
 	}
-} 
+}

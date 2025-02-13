@@ -149,7 +149,7 @@ func (u *Updater) checkLatestMode(ctx context.Context, currentImage string, regi
 }
 
 // Update container if needed
-func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1.Container, annotations *map[string]string, namespace string) (bool, error) {
+func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1.Container, annotations *map[string]string, namespace string, imagePullSecrets []corev1.LocalObjectReference) (bool, error) {
 	// Ensure annotations map exists
 	if *annotations == nil {
 		*annotations = make(map[string]string)
@@ -171,7 +171,13 @@ func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1
 		mode = "release" // Default to release mode
 	}
 
-	registryClient, err := u.getRegistryClientForSecret(ctx, namespace, (*annotations)[config.AnnotationSecret])
+	// Get the first imagePullSecret if available
+	var secretName string
+	if len(imagePullSecrets) > 0 {
+		secretName = imagePullSecrets[0].Name
+	}
+
+	registryClient, err := u.getRegistryClientForSecret(ctx, namespace, secretName)
 	if err != nil {
 		return false, fmt.Errorf("failed to get registry client: %v", err)
 	}
@@ -233,8 +239,8 @@ func (u *Updater) updateDeployments(ctx context.Context) error {
 		for i := range deploy.Spec.Template.Spec.Containers {
 			container := &deploy.Spec.Template.Spec.Containers[i]
 			logrus.Debugf("Checking container %s in deployment %s/%s", container.Name, deploy.Namespace, deploy.Name)
-			
-			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, &deploy.Annotations, deploy.Namespace)
+
+			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, &deploy.Annotations, deploy.Namespace, deploy.Spec.Template.Spec.ImagePullSecrets)
 			if err != nil {
 				logrus.Errorf("Failed to update container %s in deployment %s/%s: %v", container.Name, deploy.Namespace, deploy.Name, err)
 				continue
@@ -278,8 +284,8 @@ func (u *Updater) updateStatefulSets(ctx context.Context) error {
 		for i := range sts.Spec.Template.Spec.Containers {
 			container := &sts.Spec.Template.Spec.Containers[i]
 			logrus.Debugf("Checking container %s in statefulset %s/%s", container.Name, sts.Namespace, sts.Name)
-			
-			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, &sts.Annotations, sts.Namespace)
+
+			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, &sts.Annotations, sts.Namespace, sts.Spec.Template.Spec.ImagePullSecrets)
 			if err != nil {
 				logrus.Errorf("Failed to update container %s in statefulset %s/%s: %v", container.Name, sts.Namespace, sts.Name, err)
 				continue
@@ -323,8 +329,8 @@ func (u *Updater) updateDaemonSets(ctx context.Context) error {
 		for i := range ds.Spec.Template.Spec.Containers {
 			container := &ds.Spec.Template.Spec.Containers[i]
 			logrus.Debugf("Checking container %s in daemonset %s/%s", container.Name, ds.Namespace, ds.Name)
-			
-			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, &ds.Annotations, ds.Namespace)
+
+			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, &ds.Annotations, ds.Namespace, ds.Spec.Template.Spec.ImagePullSecrets)
 			if err != nil {
 				logrus.Errorf("Failed to update container %s in daemonset %s/%s: %v", container.Name, ds.Namespace, ds.Name, err)
 				continue
@@ -346,4 +352,4 @@ func (u *Updater) updateDaemonSets(ctx context.Context) error {
 	}
 
 	return nil
-} 
+}
