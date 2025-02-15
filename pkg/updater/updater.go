@@ -244,13 +244,14 @@ func (u *Updater) updateDeployments(ctx context.Context) error {
 			container := &deploy.Spec.Template.Spec.Containers[i]
 			logrus.Debugf("Checking container %s in deployment %s/%s", container.Name, deploy.Namespace, deploy.Name)
 
-			updated, err := u.updateContainerIfNeeded(ctx, container, &deploy.Annotations, deploy.Namespace, &deploy.Spec.Template)
+			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, &deploy.Annotations, deploy.Namespace, &deploy.Spec.Template)
 			if err != nil {
 				logrus.Errorf("Failed to update container %s in deployment %s/%s: %v", container.Name, deploy.Namespace, deploy.Name, err)
 				continue
 			}
-			if updated {
+			if containerUpdated {
 				logrus.Infof("Container %s in deployment %s/%s needs update", container.Name, deploy.Namespace, deploy.Name)
+				updated = true
 			}
 		}
 
@@ -288,13 +289,14 @@ func (u *Updater) updateStatefulSets(ctx context.Context) error {
 			container := &sts.Spec.Template.Spec.Containers[i]
 			logrus.Debugf("Checking container %s in statefulset %s/%s", container.Name, sts.Namespace, sts.Name)
 
-			updated, err := u.updateContainerIfNeeded(ctx, container, &sts.Annotations, sts.Namespace, &sts.Spec.Template)
+			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, &sts.Annotations, sts.Namespace, &sts.Spec.Template)
 			if err != nil {
 				logrus.Errorf("Failed to update container %s in statefulset %s/%s: %v", container.Name, sts.Namespace, sts.Name, err)
 				continue
 			}
-			if updated {
+			if containerUpdated {
 				logrus.Infof("Container %s in statefulset %s/%s needs update", container.Name, sts.Namespace, sts.Name)
+				updated = true
 			}
 		}
 
@@ -332,13 +334,14 @@ func (u *Updater) updateDaemonSets(ctx context.Context) error {
 			container := &ds.Spec.Template.Spec.Containers[i]
 			logrus.Debugf("Checking container %s in daemonset %s/%s", container.Name, ds.Namespace, ds.Name)
 
-			updated, err := u.updateContainerIfNeeded(ctx, container, &ds.Annotations, ds.Namespace, &ds.Spec.Template)
+			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, &ds.Annotations, ds.Namespace, &ds.Spec.Template)
 			if err != nil {
 				logrus.Errorf("Failed to update container %s in daemonset %s/%s: %v", container.Name, ds.Namespace, ds.Name, err)
 				continue
 			}
-			if updated {
+			if containerUpdated {
 				logrus.Infof("Container %s in daemonset %s/%s needs update", container.Name, ds.Namespace, ds.Name)
+				updated = true
 			}
 		}
 
