@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"github.com/monlor/k8s-image-updater/config"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	appsv1 "k8s.io/api/apps/v1"
 )
 
 type Client struct {
@@ -276,7 +276,7 @@ func (c *Client) ListDaemonSets(ctx context.Context, opts metav1.ListOptions) ([
 
 // Get secret from the cluster
 func (c *Client) GetSecret(ctx context.Context, namespace, name string) (*corev1.Secret, error) {
-	return c.clientset.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{}) 
+	return c.clientset.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
 }
 
 // Update deployment in the cluster

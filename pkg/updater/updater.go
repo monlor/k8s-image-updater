@@ -2,6 +2,7 @@ package updater
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -80,14 +81,33 @@ func (u *Updater) getRegistryClientForSecret(ctx context.Context, namespace, sec
 
 	secret, err := u.k8sClient.GetSecret(ctx, namespace, secretName)
 	if err != nil {
-		logrus.Debugf("Failed to get registry secret: %v", err)
+		logrus.Errorf("Failed to get registry secret %s: %v", secretName, err)
 		return registry.NewRegistryClient("", ""), nil
 	}
 
 	logrus.Debugf("Registry secret found: %s", secretName)
 
-	username := string(secret.Data["username"])
-	password := string(secret.Data["password"])
+	dockerConfig := make(map[string]interface{})
+	if err := json.Unmarshal(secret.Data[".dockerconfigjson"], &dockerConfig); err != nil {
+		logrus.Errorf("Failed to unmarshal docker config for secret %s: %v", secretName, err)
+		return registry.NewRegistryClient("", ""), nil
+	}
+
+	auths, ok := dockerConfig["auths"].(map[string]interface{})
+	if !ok {
+		logrus.Errorf("No auths found in docker config for secret %s", secretName)
+		return registry.NewRegistryClient("", ""), nil
+	}
+
+	// Get first auth entry
+	var auth map[string]interface{}
+	for _, v := range auths {
+		auth = v.(map[string]interface{})
+		break
+	}
+
+	username, _ := auth["username"].(string)
+	password, _ := auth["password"].(string)
 	return registry.NewRegistryClient(username, password), nil
 }
 
