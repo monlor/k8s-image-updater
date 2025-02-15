@@ -42,5 +42,4 @@ func init() {
 	if err := env.Parse(GlobalConfig); err != nil {
 		logrus.Fatalf("Failed to parse environment variables: %v", err)
 	}
-	logrus.Infof("Loaded configuration: %+v", GlobalConfig)
 }
