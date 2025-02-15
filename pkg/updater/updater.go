@@ -74,13 +74,17 @@ func (u *Updater) CheckAndUpdate(ctx context.Context) error {
 // Get registry client with authentication if needed
 func (u *Updater) getRegistryClientForSecret(ctx context.Context, namespace, secretName string) (*registry.RegistryClient, error) {
 	if secretName == "" {
+		logrus.Debug("No secret name provided, using anonymous access")
 		return registry.NewRegistryClient("", ""), nil
 	}
 
 	secret, err := u.k8sClient.GetSecret(ctx, namespace, secretName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get registry secret: %v", err)
+		logrus.Debugf("Failed to get registry secret: %v", err)
+		return registry.NewRegistryClient("", ""), nil
 	}
+
+	logrus.Debugf("Registry secret found: %s", secretName)
 
 	username := string(secret.Data["username"])
 	password := string(secret.Data["password"])
@@ -124,7 +128,7 @@ func (u *Updater) checkDigestMode(ctx context.Context, currentImage string, regi
 	return "", nil
 }
 
-func (u *Updater) checkLatestMode(ctx context.Context, currentImage string, registryClient *registry.RegistryClient, annotations *map[string]string) (bool, error) {
+func (u *Updater) checkLatestMode(ctx context.Context, currentImage string, registryClient *registry.RegistryClient, annotations *map[string]string, podTemplate *corev1.PodTemplateSpec) (bool, error) {
 	newDigest, err := registryClient.GetDigest(ctx, currentImage)
 	if err != nil {
 		return false, fmt.Errorf("failed to get digest for %s: %v", currentImage, err)
@@ -141,7 +145,7 @@ func (u *Updater) checkLatestMode(ctx context.Context, currentImage string, regi
 	// Compare digests
 	if newDigest != lastDigest {
 		(*annotations)[config.AnnotationLastDigest] = newDigest
-		(*annotations)[config.AnnotationRestart] = time.Now().Format(time.RFC3339)
+		(*podTemplate).Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
 		logrus.Infof("New digest detected for %s: %s -> %s", currentImage, lastDigest, newDigest)
 		return true, nil
 	}
@@ -149,7 +153,7 @@ func (u *Updater) checkLatestMode(ctx context.Context, currentImage string, regi
 }
 
 // Update container if needed
-func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1.Container, annotations *map[string]string, namespace string, imagePullSecrets []corev1.LocalObjectReference) (bool, error) {
+func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1.Container, annotations *map[string]string, namespace string, podTemplate *corev1.PodTemplateSpec) (bool, error) {
 	// Ensure annotations map exists
 	if *annotations == nil {
 		*annotations = make(map[string]string)
@@ -173,8 +177,8 @@ func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1
 
 	// Get the first imagePullSecret if available
 	var secretName string
-	if len(imagePullSecrets) > 0 {
-		secretName = imagePullSecrets[0].Name
+	if len(podTemplate.Spec.ImagePullSecrets) > 0 {
+		secretName = podTemplate.Spec.ImagePullSecrets[0].Name
 	}
 
 	registryClient, err := u.getRegistryClientForSecret(ctx, namespace, secretName)
@@ -190,7 +194,7 @@ func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1
 			logrus.Warnf("Container %s is in latest mode but imagePullPolicy is not Always, skipping update", container.Name)
 			return false, nil
 		}
-		return u.checkLatestMode(ctx, container.Image, registryClient, annotations)
+		return u.checkLatestMode(ctx, container.Image, registryClient, annotations, podTemplate)
 
 	case "digest":
 		newImage, err := u.checkDigestMode(ctx, container.Image, registryClient)
@@ -240,15 +244,14 @@ func (u *Updater) updateDeployments(ctx context.Context) error {
 			container := &deploy.Spec.Template.Spec.Containers[i]
 			logrus.Debugf("Checking container %s in deployment %s/%s", container.Name, deploy.Namespace, deploy.Name)
 
-			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, &deploy.Annotations, deploy.Namespace, deploy.Spec.Template.Spec.ImagePullSecrets)
+			updated, err := u.updateContainerIfNeeded(ctx, container, &deploy.Annotations, deploy.Namespace, &deploy.Spec.Template)
 			if err != nil {
 				logrus.Errorf("Failed to update container %s in deployment %s/%s: %v", container.Name, deploy.Namespace, deploy.Name, err)
 				continue
 			}
-			if containerUpdated {
+			if updated {
 				logrus.Infof("Container %s in deployment %s/%s needs update", container.Name, deploy.Namespace, deploy.Name)
 			}
-			updated = updated || containerUpdated
 		}
 
 		if updated {
@@ -285,15 +288,14 @@ func (u *Updater) updateStatefulSets(ctx context.Context) error {
 			container := &sts.Spec.Template.Spec.Containers[i]
 			logrus.Debugf("Checking container %s in statefulset %s/%s", container.Name, sts.Namespace, sts.Name)
 
-			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, &sts.Annotations, sts.Namespace, sts.Spec.Template.Spec.ImagePullSecrets)
+			updated, err := u.updateContainerIfNeeded(ctx, container, &sts.Annotations, sts.Namespace, &sts.Spec.Template)
 			if err != nil {
 				logrus.Errorf("Failed to update container %s in statefulset %s/%s: %v", container.Name, sts.Namespace, sts.Name, err)
 				continue
 			}
-			if containerUpdated {
+			if updated {
 				logrus.Infof("Container %s in statefulset %s/%s needs update", container.Name, sts.Namespace, sts.Name)
 			}
-			updated = updated || containerUpdated
 		}
 
 		if updated {
@@ -330,15 +332,14 @@ func (u *Updater) updateDaemonSets(ctx context.Context) error {
 			container := &ds.Spec.Template.Spec.Containers[i]
 			logrus.Debugf("Checking container %s in daemonset %s/%s", container.Name, ds.Namespace, ds.Name)
 
-			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, &ds.Annotations, ds.Namespace, ds.Spec.Template.Spec.ImagePullSecrets)
+			updated, err := u.updateContainerIfNeeded(ctx, container, &ds.Annotations, ds.Namespace, &ds.Spec.Template)
 			if err != nil {
 				logrus.Errorf("Failed to update container %s in daemonset %s/%s: %v", container.Name, ds.Namespace, ds.Name, err)
 				continue
 			}
-			if containerUpdated {
+			if updated {
 				logrus.Infof("Container %s in daemonset %s/%s needs update", container.Name, ds.Namespace, ds.Name)
 			}
-			updated = updated || containerUpdated
 		}
 
 		if updated {
