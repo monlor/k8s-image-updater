@@ -258,7 +258,7 @@ func (u *Updater) checkLatestMode(ctx context.Context, currentImage string, regi
 }
 
 // Update container if needed
-func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1.Container, annotations *map[string]string, namespace string, podTemplate *corev1.PodTemplateSpec) (bool, error) {
+func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1.Container, annotations *map[string]string, namespace string, resourceName string, resourceType string, podTemplate *corev1.PodTemplateSpec) (bool, error) {
 	// Ensure annotations map exists
 	if *annotations == nil {
 		*annotations = make(map[string]string)
@@ -305,7 +305,7 @@ func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1
 			return false, err
 		}
 		if needUpdate {
-			logrus.Infof("[latest] Updating image for container %s from %s to %s", container.Name, container.Image, container.Image)
+			logrus.Infof("[latest] Updating image for container %s in %s %s/%s from %s to %s", container.Name, resourceType, namespace, resourceName, container.Image, container.Image)
 			return true, nil
 		}
 
@@ -319,7 +319,7 @@ func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1
 			return false, err
 		}
 		if newImage != "" {
-			logrus.Infof("[digest] Updating image for container %s from %s to %s", container.Name, container.Image, newImage)
+			logrus.Infof("[digest] Updating image for container %s in %s %s/%s from %s to %s", container.Name, resourceType, namespace, resourceName, container.Image, newImage)
 			container.Image = newImage
 			return true, nil
 		}
@@ -330,7 +330,7 @@ func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1
 			return false, err
 		}
 		if newImage != "" {
-			logrus.Infof("[alphabetical] Updating image for container %s from %s to %s", container.Name, container.Image, newImage)
+			logrus.Infof("[alphabetical] Updating image for container %s in %s %s/%s from %s to %s", container.Name, resourceType, namespace, resourceName, container.Image, newImage)
 			container.Image = newImage
 			return true, nil
 		}
@@ -341,7 +341,7 @@ func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1
 			return false, err
 		}
 		if newImage != "" {
-			logrus.Infof("[release] Updating image for container %s from %s to %s", container.Name, container.Image, newImage)
+			logrus.Infof("[release] Updating image for container %s in %s %s/%s from %s to %s", container.Name, resourceType, namespace, resourceName, container.Image, newImage)
 			container.Image = newImage
 			return true, nil
 		}
@@ -371,7 +371,7 @@ func (u *Updater) updateDeployments(ctx context.Context) error {
 			container := &deploy.Spec.Template.Spec.Containers[i]
 			logrus.Debugf("Checking container %s in deployment %s/%s", container.Name, deploy.Namespace, deploy.Name)
 
-			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, &deploy.Annotations, deploy.Namespace, &deploy.Spec.Template)
+			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, &deploy.Annotations, deploy.Namespace, deploy.Name, "deployment", &deploy.Spec.Template)
 			if err != nil {
 				logrus.Errorf("Failed to update container %s in deployment %s/%s: %v", container.Name, deploy.Namespace, deploy.Name, err)
 				continue
@@ -382,7 +382,7 @@ func (u *Updater) updateDeployments(ctx context.Context) error {
 		}
 
 		if updated {
-			logrus.Infof("Updating deployment %s/%s", deploy.Namespace, deploy.Name)
+			logrus.Debugf("Updating deployment %s/%s", deploy.Namespace, deploy.Name)
 			if err := u.k8sClient.UpdateDeployment(&deploy); err != nil {
 				logrus.Errorf("Failed to update deployment %s/%s: %v", deploy.Namespace, deploy.Name, err)
 			}
@@ -412,7 +412,7 @@ func (u *Updater) updateStatefulSets(ctx context.Context) error {
 			container := &sts.Spec.Template.Spec.Containers[i]
 			logrus.Debugf("Checking container %s in statefulset %s/%s", container.Name, sts.Namespace, sts.Name)
 
-			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, &sts.Annotations, sts.Namespace, &sts.Spec.Template)
+			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, &sts.Annotations, sts.Namespace, sts.Name, "statefulset", &sts.Spec.Template)
 			if err != nil {
 				logrus.Errorf("Failed to update container %s in statefulset %s/%s: %v", container.Name, sts.Namespace, sts.Name, err)
 				continue
@@ -423,7 +423,7 @@ func (u *Updater) updateStatefulSets(ctx context.Context) error {
 		}
 
 		if updated {
-			logrus.Infof("Updating statefulset %s/%s", sts.Namespace, sts.Name)
+			logrus.Debugf("Updating statefulset %s/%s", sts.Namespace, sts.Name)
 			if err := u.k8sClient.UpdateStatefulSet(&sts); err != nil {
 				logrus.Errorf("Failed to update statefulset %s/%s: %v", sts.Namespace, sts.Name, err)
 			}
@@ -453,7 +453,7 @@ func (u *Updater) updateDaemonSets(ctx context.Context) error {
 			container := &ds.Spec.Template.Spec.Containers[i]
 			logrus.Debugf("Checking container %s in daemonset %s/%s", container.Name, ds.Namespace, ds.Name)
 
-			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, &ds.Annotations, ds.Namespace, &ds.Spec.Template)
+			containerUpdated, err := u.updateContainerIfNeeded(ctx, container, &ds.Annotations, ds.Namespace, ds.Name, "daemonset", &ds.Spec.Template)
 			if err != nil {
 				logrus.Errorf("Failed to update container %s in daemonset %s/%s: %v", container.Name, ds.Namespace, ds.Name, err)
 				continue
@@ -464,7 +464,7 @@ func (u *Updater) updateDaemonSets(ctx context.Context) error {
 		}
 
 		if updated {
-			logrus.Infof("Updating daemonset %s/%s", ds.Namespace, ds.Name)
+			logrus.Debugf("Updating daemonset %s/%s", ds.Namespace, ds.Name)
 			if err := u.k8sClient.UpdateDaemonSet(&ds); err != nil {
 				logrus.Errorf("Failed to update daemonset %s/%s: %v", ds.Namespace, ds.Name, err)
 			}
