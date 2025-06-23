@@ -34,6 +34,8 @@ const (
 	AnnotationRestart = "kubectl.kubernetes.io/restartedAt"
 	// Last known digest for latest mode
 	AnnotationLastDigest = "image-updater.k8s.io/last-digest"
+	// Allow tags regex
+	AnnotationAllowTags = "image-updater.k8s.io/allow-tags"
 )
 
 var GlobalConfig = &Config{}

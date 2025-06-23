@@ -45,7 +45,7 @@ func ParseImage(image string) (*ImageInfo, error) {
 
 	registry := ref.Context().Registry.Name()
 	repository := ref.Context().RepositoryStr()
-	
+
 	var tag, digest string
 	if tagRef, ok := ref.(name.Tag); ok {
 		tag = tagRef.TagStr()
@@ -96,6 +96,12 @@ func (c *RegistryClient) GetDigest(ctx context.Context, image string) (string, e
 	return desc.Digest.String(), nil
 }
 
+// SortAlphabeticalTags sorts tags in descending lexicographical order.
+func SortAlphabeticalTags(tags []string) []string {
+	sort.Sort(sort.Reverse(sort.StringSlice(tags)))
+	return tags
+}
+
 // Sort version tags (e.g., v1.2.3, 1.2.3)
 func SortVersionTags(tags []string) []string {
 	var versions []string
@@ -104,7 +110,7 @@ func SortVersionTags(tags []string) []string {
 	for _, tag := range tags {
 		// Remove 'v' prefix if exists
 		cleanTag := strings.TrimPrefix(tag, "v")
-		
+
 		// Try to parse as version
 		v, err := version.NewVersion(cleanTag)
 		if err == nil {
@@ -145,4 +151,4 @@ func parseInt(s string) (int, error) {
 	var err error
 	fmt.Sscanf(s, "%d", &num)
 	return num, err
-} 
+}

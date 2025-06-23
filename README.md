@@ -63,8 +63,9 @@ The auto-update feature can be configured using annotations on your Kubernetes r
 ```yaml
 annotations:
   image-updater.k8s.io/enabled: "true"           # Enable auto-update for this resource
-  image-updater.k8s.io/mode: "release"          # Update mode: "release", "digest" or "latest"
+  image-updater.k8s.io/mode: "release"          # Update mode: "release", "digest", "latest" or "alphabetical"
   image-updater.k8s.io/container: "app"         # Optional: specify container name
+  image-updater.k8s.io/allow-tags: "regexp:^v[0-9.]+" # Optional. For release/alphabetical, use 'regexp:' prefix. For digest, provide a tag name.
 ```
 
 ### Update Modes
@@ -75,15 +76,22 @@ annotations:
    - Example: `nginx:1.21.0` -> `nginx:1.22.0`
 
 2. **Digest Mode** (`mode: "digest"`)
-   - Updates when the image digest changes
-   - Useful for `latest` tags or when you want to update on any change
-   - Example: `nginx@sha256:abc...` -> `nginx@sha256:xyz...`
+   - Updates when the image digest of a specific tag changes.
+   - The tag to monitor is specified via the `image-updater.k8s.io/allow-tags` annotation. If not provided, it defaults to `latest`.
+   - Example: with `allow-tags: "stable"`, the updater monitors `my-image:stable` for a new digest.
+   - The updated image will use the digest, e.g., `nginx@sha256:xyz...`
 
 3. **Latest Mode** (`mode: "latest"`)
-   - Monitors digest changes for images with fixed tags (including latest tag)
+   - Monitors digest changes for the image tag specified in the deployment (including `latest`).
    - Requires `imagePullPolicy: Always` to be set
    - Restarts the pod when a new image is detected with the same tag
    - Example: When `nginx:latest` has a new digest, the pod will be restarted
+
+4. **Alphabetical/Name Mode** (`mode: "alphabetical"` or `mode: "name"`)
+   - Sorts tags alphabetically (lexically) and updates to the highest tag.
+   - Useful for tags with dates or other sortable names.
+   - Can be combined with `allow-tags` for more specific filtering. The `allow-tags` value must be prefixed with `regexp:`.
+   - Example: `my-app:build-20231026` -> `my-app:build-20231027`
 
 ### Example Configuration
 
@@ -94,7 +102,8 @@ metadata:
   name: my-app
   annotations:
     image-updater.k8s.io/enabled: "true"
-    image-updater.k8s.io/mode: "release"
+    image-updater.k8s.io/mode: "digest"
+    image-updater.k8s.io/allow-tags: "stable"
     image-updater.k8s.io/container: "app"
 spec:
   template:
