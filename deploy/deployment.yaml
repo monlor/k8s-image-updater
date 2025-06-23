@@ -20,17 +20,12 @@ spec:
         ports:
         - containerPort: 8080
         env:
-        - name: API_PORT
-          value: "8080"
         - name: API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: k8s-image-updater
-              key: api-key
+          value: "z0ooJ352l3sYLPo5KYo1224pf3GKF6MFM89ZRgHbKsGM8Gmg5WuBztArTL6pcbgG"
         - name: UPDATER_ENABLED
           value: "true"
         - name: IMAGE_UPDATE_INTERVAL
-          value: "5m"
+          value: "1m"
         resources:
           requests:
             cpu: 100m
@@ -51,3 +46,34 @@ spec:
   - port: 8080
     targetPort: 8080
   type: ClusterIP 
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: k8s-image-updater
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: k8s-image-updater
+rules:
+- apiGroups: ["apps"]
+  resources: ["deployments", "statefulsets", "daemonsets"]
+  verbs: ["get", "list", "update"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: k8s-image-updater
+subjects:
+- kind: ServiceAccount
+  name: k8s-image-updater
+  namespace: kube-system
+roleRef:
+  kind: ClusterRole
+  name: k8s-image-updater
+  apiGroup: rbac.authorization.k8s.io 

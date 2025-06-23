@@ -300,7 +300,14 @@ func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1
 			logrus.Warnf("Container %s is in latest mode but imagePullPolicy is not Always, skipping update", container.Name)
 			return false, nil
 		}
-		return u.checkLatestMode(ctx, container.Image, registryClient, annotations, podTemplate)
+		needUpdate, err := u.checkLatestMode(ctx, container.Image, registryClient, annotations, podTemplate)
+		if err != nil {
+			return false, err
+		}
+		if needUpdate {
+			logrus.Infof("[latest] Updating image for container %s from %s to %s", container.Name, container.Image, container.Image)
+			return true, nil
+		}
 
 	case "digest":
 		tagToCheck := "latest" // default
@@ -312,7 +319,7 @@ func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1
 			return false, err
 		}
 		if newImage != "" {
-			logrus.Infof("Updating image for container %s from %s to %s", container.Name, container.Image, newImage)
+			logrus.Infof("[digest] Updating image for container %s from %s to %s", container.Name, container.Image, newImage)
 			container.Image = newImage
 			return true, nil
 		}
@@ -323,7 +330,7 @@ func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1
 			return false, err
 		}
 		if newImage != "" {
-			logrus.Infof("Updating image for container %s from %s to %s", container.Name, container.Image, newImage)
+			logrus.Infof("[alphabetical] Updating image for container %s from %s to %s", container.Name, container.Image, newImage)
 			container.Image = newImage
 			return true, nil
 		}
@@ -334,7 +341,7 @@ func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1
 			return false, err
 		}
 		if newImage != "" {
-			logrus.Infof("Updating image for container %s from %s to %s", container.Name, container.Image, newImage)
+			logrus.Infof("[release] Updating image for container %s from %s to %s", container.Name, container.Image, newImage)
 			container.Image = newImage
 			return true, nil
 		}
@@ -370,7 +377,6 @@ func (u *Updater) updateDeployments(ctx context.Context) error {
 				continue
 			}
 			if containerUpdated {
-				logrus.Infof("Container %s in deployment %s/%s needs update", container.Name, deploy.Namespace, deploy.Name)
 				updated = true
 			}
 		}
@@ -412,7 +418,6 @@ func (u *Updater) updateStatefulSets(ctx context.Context) error {
 				continue
 			}
 			if containerUpdated {
-				logrus.Infof("Container %s in statefulset %s/%s needs update", container.Name, sts.Namespace, sts.Name)
 				updated = true
 			}
 		}
@@ -454,7 +459,6 @@ func (u *Updater) updateDaemonSets(ctx context.Context) error {
 				continue
 			}
 			if containerUpdated {
-				logrus.Infof("Container %s in daemonset %s/%s needs update", container.Name, ds.Namespace, ds.Name)
 				updated = true
 			}
 		}
