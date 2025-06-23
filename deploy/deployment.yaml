@@ -17,11 +17,16 @@ spec:
       containers:
       - name: k8s-image-updater
         image: ghcr.io/monlor/k8s-image-updater:main
+        imagePullPolicy: Always
         ports:
         - containerPort: 8080
         env:
+        - name: API_PORT
+          value: "8080"
         - name: API_KEY
           value: "z0ooJ352l3sYLPo5KYo1224pf3GKF6MFM89ZRgHbKsGM8Gmg5WuBztArTL6pcbgG"
+        - name: LOG_TIMEZONE
+          value: "Asia/Shanghai"
         - name: UPDATER_ENABLED
           value: "true"
         - name: IMAGE_UPDATE_INTERVAL
