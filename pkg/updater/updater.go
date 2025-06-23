@@ -256,7 +256,7 @@ func (u *Updater) checkLatestMode(ctx context.Context, currentImage string, regi
 	if newDigest != lastDigest {
 		(*annotations)[config.AnnotationLastDigest] = newDigest
 		(*podTemplate).Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
-		logrus.Infof("New digest detected for %s: %s -> %s", currentImage, lastDigest, newDigest)
+		logrus.Infof(`New digest detected for %s: %s -> %s`, currentImage, lastDigest, newDigest)
 		return true, nil
 	}
 	return false, nil
@@ -310,7 +310,7 @@ func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1
 			return false, err
 		}
 		if needUpdate {
-			logrus.Infof("[latest] Updating image for container %s in %s %s/%s from %s to %s", container.Name, resourceType, namespace, resourceName, container.Image, container.Image)
+			logrus.Infof("[latest] Updating image for container %s in %s %s/%s to %s", container.Name, resourceType, namespace, resourceName, container.Image)
 			return true, nil
 		}
 

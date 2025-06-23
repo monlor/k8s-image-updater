@@ -64,7 +64,7 @@ metadata:
     image-updater.k8s.io/mode: "digest"
 spec:
   serviceName: nginx-statefulset
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: nginx-sts
