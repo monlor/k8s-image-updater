@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/monlor/k8s-image-updater/config"
@@ -12,50 +11,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// CustomTextFormatter is a custom logrus formatter that includes a specific timezone.
-type CustomTextFormatter struct {
-	logrus.TextFormatter
-	Location *time.Location
-}
-
-// Format formats the log entry.
-func (f *CustomTextFormatter) Format(entry *logrus.Entry) ([]byte, error) {
-	entry.Time = entry.Time.In(f.Location)
-	return f.TextFormatter.Format(entry)
-}
-
-// CustomJSONFormatter is a custom logrus formatter that includes a specific timezone.
-type CustomJSONFormatter struct {
-	logrus.JSONFormatter
-	Location *time.Location
-}
-
-// Format formats the log entry.
-func (f *CustomJSONFormatter) Format(entry *logrus.Entry) ([]byte, error) {
-	entry.Time = entry.Time.In(f.Location)
-	return f.JSONFormatter.Format(entry)
-}
-
 func main() {
-	// Load timezone
-	loc, err := time.LoadLocation(config.GlobalConfig.LogTimezone)
-	if err != nil {
-		logrus.Warnf("Invalid timezone %q, using UTC: %v", config.GlobalConfig.LogTimezone, err)
-		loc, _ = time.LoadLocation("UTC")
-	}
-
 	// Set log format
 	if gin.Mode() == gin.ReleaseMode {
-		logrus.SetFormatter(&CustomJSONFormatter{
-			JSONFormatter: logrus.JSONFormatter{},
-			Location:      loc,
-		})
+		logrus.SetFormatter(&logrus.JSONFormatter{})
 	} else {
-		logrus.SetFormatter(&CustomTextFormatter{
-			TextFormatter: logrus.TextFormatter{
-				FullTimestamp: true,
-			},
-			Location: loc,
+		logrus.SetFormatter(&logrus.TextFormatter{
+			FullTimestamp: true,
 		})
 	}
 

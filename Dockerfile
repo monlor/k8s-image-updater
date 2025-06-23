@@ -18,13 +18,16 @@ RUN GOARCH=${TARGETARCH} CGO_ENABLED=0 GOOS=linux go build \
     -o k8s-image-updater
 
 # Final stage
-FROM scratch
+FROM alpine:latest
+
+# Install timezone data
+RUN apk --no-cache add tzdata
+
+ENV GIN_MODE=release
 
 # Copy SSL certificates from builder
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /app/k8s-image-updater /
-
-ENV GIN_MODE=release
 
 EXPOSE 8080
 ENTRYPOINT ["/k8s-image-updater"] 
