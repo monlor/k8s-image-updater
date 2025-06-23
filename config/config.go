@@ -9,10 +9,11 @@ import (
 
 type Config struct {
 	// API service configuration
-	APIPort    int    `env:"API_PORT" envDefault:"8080"`
-	APIKey     string `env:"API_KEY" envDefault:""`
-	KubeConfig string `env:"KUBECONFIG" envDefault:""`
-	LogLevel   string `env:"LOG_LEVEL" envDefault:""`
+	APIPort     int    `env:"API_PORT" envDefault:"8080"`
+	APIKey      string `env:"API_KEY" envDefault:""`
+	KubeConfig  string `env:"KUBECONFIG" envDefault:""`
+	LogLevel    string `env:"LOG_LEVEL" envDefault:""`
+	LogTimezone string `env:"LOG_TIMEZONE" envDefault:"UTC"`
 
 	// Image update configuration
 	UpdaterEnabled      bool          `env:"UPDATER_ENABLED" envDefault:"true"`     // Enable/disable auto updater
