@@ -264,11 +264,6 @@ func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1
 		*annotations = make(map[string]string)
 	}
 
-	if (*annotations)[config.AnnotationEnabled] != "true" {
-		logrus.Debugf("Auto-update not enabled for container %s", container.Name)
-		return false, nil
-	}
-
 	containerName := (*annotations)[config.AnnotationContainer]
 	if containerName != "" && containerName != container.Name {
 		logrus.Debugf("Container %s does not match target container %s", container.Name, containerName)
@@ -354,19 +349,16 @@ func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1
 // Update deployments with auto-update annotations
 func (u *Updater) updateDeployments(ctx context.Context) error {
 	logrus.Debug("Checking deployments for updates")
-	deployments, err := u.k8sClient.ListDeployments(ctx, metav1.ListOptions{})
+	deployments, err := u.k8sClient.ListDeployments(ctx, metav1.ListOptions{
+		LabelSelector: config.LabelEnabled + "=true",
+	})
 	if err != nil {
 		return err
 	}
-	logrus.Debugf("Found %d deployments in total", len(deployments))
+	logrus.Debugf("Found %d deployments enabled for auto-update", len(deployments))
 
 	for _, deploy := range deployments {
 		logrus.Debugf("Checking deployment %s/%s", deploy.Namespace, deploy.Name)
-		if deploy.Annotations[config.AnnotationEnabled] != "true" {
-			logrus.Debugf("Deployment %s/%s is not enabled for auto-update", deploy.Namespace, deploy.Name)
-			continue
-		}
-
 		updated := false
 		for i := range deploy.Spec.Template.Spec.Containers {
 			container := &deploy.Spec.Template.Spec.Containers[i]
@@ -399,19 +391,16 @@ func (u *Updater) updateDeployments(ctx context.Context) error {
 // Update StatefulSets with auto-update annotations
 func (u *Updater) updateStatefulSets(ctx context.Context) error {
 	logrus.Debug("Checking statefulsets for updates")
-	statefulsets, err := u.k8sClient.ListStatefulSets(ctx, metav1.ListOptions{})
+	statefulsets, err := u.k8sClient.ListStatefulSets(ctx, metav1.ListOptions{
+		LabelSelector: config.LabelEnabled + "=true",
+	})
 	if err != nil {
 		return err
 	}
-	logrus.Debugf("Found %d statefulsets in total", len(statefulsets))
+	logrus.Debugf("Found %d statefulsets enabled for auto-update", len(statefulsets))
 
 	for _, sts := range statefulsets {
 		logrus.Debugf("Checking statefulset %s/%s", sts.Namespace, sts.Name)
-		if sts.Annotations[config.AnnotationEnabled] != "true" {
-			logrus.Debugf("StatefulSet %s/%s is not enabled for auto-update", sts.Namespace, sts.Name)
-			continue
-		}
-
 		updated := false
 		for i := range sts.Spec.Template.Spec.Containers {
 			container := &sts.Spec.Template.Spec.Containers[i]
@@ -444,19 +433,16 @@ func (u *Updater) updateStatefulSets(ctx context.Context) error {
 // Update DaemonSets with auto-update annotations
 func (u *Updater) updateDaemonSets(ctx context.Context) error {
 	logrus.Debug("Checking daemonsets for updates")
-	daemonsets, err := u.k8sClient.ListDaemonSets(ctx, metav1.ListOptions{})
+	daemonsets, err := u.k8sClient.ListDaemonSets(ctx, metav1.ListOptions{
+		LabelSelector: config.LabelEnabled + "=true",
+	})
 	if err != nil {
 		return err
 	}
-	logrus.Debugf("Found %d daemonsets in total", len(daemonsets))
+	logrus.Debugf("Found %d daemonsets enabled for auto-update", len(daemonsets))
 
 	for _, ds := range daemonsets {
 		logrus.Debugf("Checking daemonset %s/%s", ds.Namespace, ds.Name)
-		if ds.Annotations[config.AnnotationEnabled] != "true" {
-			logrus.Debugf("DaemonSet %s/%s is not enabled for auto-update", ds.Namespace, ds.Name)
-			continue
-		}
-
 		updated := false
 		for i := range ds.Spec.Template.Spec.Containers {
 			container := &ds.Spec.Template.Spec.Containers[i]

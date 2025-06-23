@@ -25,7 +25,7 @@ type Config struct {
 // Annotation keys for image update configuration
 const (
 	// Enable auto update for the resource
-	AnnotationEnabled = "image-updater.k8s.io/enabled"
+	LabelEnabled = "image-updater.k8s.io/enabled"
 	// Image update mode: digest, release or latest
 	AnnotationMode = "image-updater.k8s.io/mode"
 	// Container name to update, if not set, update all containers

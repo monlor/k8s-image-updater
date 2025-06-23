@@ -58,11 +58,12 @@ kubectl apply -f deploy/deployment.yaml
 
 ## Auto-Update Configuration
 
-The auto-update feature can be configured using annotations on your Kubernetes resources:
+The auto-update feature can be configured using labels and annotations on your Kubernetes resources:
 
 ```yaml
-annotations:
+labels:
   image-updater.k8s.io/enabled: "true"           # Enable auto-update for this resource
+annotations:
   image-updater.k8s.io/mode: "release"          # Update mode: "release", "digest", "latest" or "alphabetical"
   image-updater.k8s.io/container: "app"         # Optional: specify container name
   image-updater.k8s.io/allow-tags: "regexp:^v[0-9.]+" # Optional. For release/alphabetical, use 'regexp:' prefix. For digest, provide a tag name.
@@ -100,8 +101,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: my-app
-  annotations:
+  labels:
     image-updater.k8s.io/enabled: "true"
+  annotations:
     image-updater.k8s.io/mode: "digest"
     image-updater.k8s.io/allow-tags: "stable"
     image-updater.k8s.io/container: "app"
@@ -197,7 +199,7 @@ Environment variables:
 
 The auto-updater can be:
 1. Disabled globally using `UPDATER_ENABLED=false`
-2. Enabled/disabled per resource using annotations
+2. Enabled/disabled per resource using a label
 
 Example deployment with auto-updater disabled globally:
 ```yaml
