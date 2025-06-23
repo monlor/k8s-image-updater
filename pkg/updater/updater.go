@@ -239,6 +239,11 @@ func (u *Updater) checkLatestMode(ctx context.Context, currentImage string, regi
 		return false, fmt.Errorf("failed to get digest for %s: %v", currentImage, err)
 	}
 
+	// Ensure pod annotations map exists
+	if (*podTemplate).Annotations == nil {
+		(*podTemplate).Annotations = make(map[string]string)
+	}
+
 	lastDigest := (*annotations)[config.AnnotationLastDigest]
 	if lastDigest == "" {
 		(*annotations)[config.AnnotationLastDigest] = newDigest
@@ -259,7 +264,7 @@ func (u *Updater) checkLatestMode(ctx context.Context, currentImage string, regi
 
 // Update container if needed
 func (u *Updater) updateContainerIfNeeded(ctx context.Context, container *corev1.Container, annotations *map[string]string, namespace string, resourceName string, resourceType string, podTemplate *corev1.PodTemplateSpec) (bool, error) {
-	// Ensure annotations map exists
+	// Ensure resource annotations map exists
 	if *annotations == nil {
 		*annotations = make(map[string]string)
 	}
